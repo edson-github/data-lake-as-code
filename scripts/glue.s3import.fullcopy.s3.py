@@ -32,27 +32,33 @@ nextToken = ''
 while keepPullingTables:
   responseGetTables = client.get_tables(DatabaseName=glue_database, NextToken=nextToken)
   tableList = responseGetTables['TableList']
-  for tableDict in tableList:
-    tables.append(tableDict['Name'])
-  
+  tables.extend(tableDict['Name'] for tableDict in tableList)
   if 'NextToken' in responseGetTables:
     nextToken = responseGetTables['NextToken']
   else:
     nextToken = ''
+
+  keepPullingTables = nextToken != ''
     
-  keepPullingTables = True if nextToken != '' else False
-  
 
 for table in tables:
     
-  datasource = glueContext.create_dynamic_frame.from_catalog(database = glue_database, table_name = table, transformation_ctx = "datasource")   
+  datasource = glueContext.create_dynamic_frame.from_catalog(database = glue_database, table_name = table, transformation_ctx = "datasource")
   dropnullfields = DropNullFields.apply(frame = datasource, transformation_ctx = "dropnullfields")
-  
+
   try:
-    datasink = glueContext.write_dynamic_frame.from_options(frame = dropnullfields, connection_type = "s3", connection_options = {"path": "s3://"+dataLakeBucket + dataLakePrefix + table}, format = target_format, transformation_ctx = "datasink")
+    datasink = glueContext.write_dynamic_frame.from_options(
+        frame=dropnullfields,
+        connection_type="s3",
+        connection_options={
+            "path": f"s3://{dataLakeBucket}{dataLakePrefix}{table}"
+        },
+        format=target_format,
+        transformation_ctx="datasink",
+    )
   except:
-    print("Unable to write" + table)
-    
+    print(f"Unable to write{table}")
+
 job.commit()
 
 
